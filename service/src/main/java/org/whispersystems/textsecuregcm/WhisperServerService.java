@@ -287,6 +287,7 @@ import org.whispersystems.textsecuregcm.storage.RepeatedUseECSignedPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.RepeatedUseKEMSignedPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.ReportMessageDynamoDb;
 import org.whispersystems.textsecuregcm.storage.ReportMessageManager;
+import org.whispersystems.textsecuregcm.storage.SandboxAccounts;
 import org.whispersystems.textsecuregcm.storage.SingleUseECPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.SubscriptionManager;
 import org.whispersystems.textsecuregcm.storage.Subscriptions;
@@ -823,10 +824,12 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
         config.getRegistrationWebAuthnConfiguration().challengeTtl(),
         config.getRegistrationWebAuthnConfiguration().userHandleBlindingSecret().value(),
         rateLimitersCluster);
+    final SandboxAccounts sandboxAccounts = new SandboxAccounts(
+        config.getDynamoDbTables().getSandboxAccounts().getTableName(), dynamoDbClient);
     final AccountsManager accountsManager = new AccountsManager(accounts, phoneNumberIdentifiers, cacheCluster,
         pubsubClient, accountLockManager, keysManager, messagesManager, profilesManager,
         changeNumberWaitingPeriodManager, secureStorageClient, secureValueRecovery2Client, disconnectionRequestManager,
-        phoneNumberRecoveryPasswordsManager, messagePollExecutor,
+        phoneNumberRecoveryPasswordsManager, sandboxAccounts, messagePollExecutor,
         retryExecutor, clock, config.getLinkDeviceSecretConfiguration().secret().value(),
         webAuthnCeremonyManager, totpManager);
     RemoteConfigsManager remoteConfigsManager = new RemoteConfigsManager(remoteConfigs, config.getRemoteConfigConfiguration().globalConfig());

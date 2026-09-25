@@ -145,6 +145,8 @@ dynamoDbTables:
     tableName: Example_RemoteConfig
   reportMessage:
     tableName: Example_ReportMessage
+  sandboxAccounts:
+    tableName: Example_SandboxAccounts
   scheduledJobs:
     tableName: Example_ScheduledJobs
     expiration: P7D

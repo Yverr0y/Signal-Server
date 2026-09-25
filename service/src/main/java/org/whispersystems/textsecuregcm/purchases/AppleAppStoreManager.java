@@ -171,9 +171,16 @@ public class AppleAppStoreManager implements SubscriptionPaymentProcessor, OneTi
     if (transaction.getRevocationDate() != null) {
       throw new PurchasePaymentRequiredException(getProvider());
     }
+
+    ReceiptLevel receiptLevel = getLevel(transaction);
+    if (receiptLevel == ReceiptLevel.LOGIN && transaction.getEnvironment() != appleAppStoreClient.getDefaultEnvironment()) {
+      // This is a special case: if we had to resort to the fallback environment to resolve this transaction, we should
+      // mark the purchase to indicate it only gets a restricted entitlement.
+      receiptLevel = ReceiptLevel.LOGIN_SANDBOX;
+    }
     return new PaymentDetails(
         Objects.requireNonNull(transaction.getTransactionId()),
-        getLevel(transaction),
+        receiptLevel,
         Instant.ofEpochMilli(transaction.getPurchaseDate()));
 
   }

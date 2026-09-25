@@ -195,6 +195,10 @@ public class AppleAppStoreClient {
     }
   }
 
+  Environment getDefaultEnvironment() {
+    return defaultEnvironment;
+  }
+
   private <T> T lookupByTransactionIdInEnvironment(final Environment env, final String transactionId, final Tags errorTags, final TransactionFinder<T> lookupFunction) throws APIException, IOException {
     try {
       return retry.executeCallable(() -> {

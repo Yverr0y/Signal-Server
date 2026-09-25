@@ -28,6 +28,9 @@ public class LoginPurchaseManager {
   @VisibleForTesting
   final static Duration LOGIN_EXPIRATION = Duration.ofDays(366 * 5);
 
+  @VisibleForTesting
+  final static Duration SANDBOX_LOGIN_EXPIRATION = Duration.ofDays(2);
+
   /// Construct a LoginPurchaseManager
   ///
   /// @param oneTimePaymentProcessors The processor to use for each supported [PaymentProvider]
@@ -65,23 +68,26 @@ public class LoginPurchaseManager {
     }
 
     final PaymentDetails paymentDetails = oneTimePaymentProcessor.claimOneTimePurchase(purchaseId);
-    if (paymentDetails.level() != ReceiptLevel.LOGIN) {
-      throw new PurchaseInvalidArgumentsException("purchase was for an unexpected product");
-    }
+    final Duration expirationDuration = switch (paymentDetails.level()) {
+      case LOGIN -> LOGIN_EXPIRATION;
+      case LOGIN_SANDBOX -> SANDBOX_LOGIN_EXPIRATION;
+      case ONE_TIME_DONATION, ONE_TIME_GIFT_DONATION, BACKUP_FREE, BACKUP_PAID, SUBSCRIPTION_LOW, SUBSCRIPTION_MEDIUM, SUBSCRIPTION_HIGH ->
+          throw new PurchaseInvalidArgumentsException("purchase was for an unexpected product");
+    };
 
     // Calculating the expiration from the creation date works for IAP purchases. However, for other processors, the
     // creation date of the payment intent might be days before the payment actually completed. If we support non-IAP
     // processors we should attempt to get the latest date. see OneTimeDonationController/OneTimeDonationsManager
-    final Instant expiration = paymentDetails.created().plus(LOGIN_EXPIRATION).truncatedTo(ChronoUnit.DAYS);
+    final Instant expireAt = paymentDetails.created().plus(expirationDuration).truncatedTo(ChronoUnit.DAYS);
 
     try {
       issuedReceiptsManager.recordOneTimeIssuance(paymentDetails.id(), paymentProvider, receiptCredentialRequest,
-          expiration);
+          expireAt);
     } catch (WriteConflictException _) {
       throw new PurchaseReceiptAlreadyRedeemedException();
     }
 
-    return zkReceiptOperations.issueReceiptCredential(receiptCredentialRequest, expiration.getEpochSecond(),
-        ReceiptLevel.LOGIN.getValue());
+    return zkReceiptOperations.issueReceiptCredential(receiptCredentialRequest, expireAt.getEpochSecond(),
+        paymentDetails.level().getValue());
   }
 }

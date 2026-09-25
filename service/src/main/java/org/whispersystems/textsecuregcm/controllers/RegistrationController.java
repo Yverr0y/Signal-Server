@@ -366,7 +366,7 @@ public class RegistrationController {
     }
 
     final long receiptLevel = receiptCredentialPresentation.getReceiptLevel();
-    if (receiptLevel != ReceiptLevel.LOGIN.getValue()) {
+    if (receiptLevel != ReceiptLevel.LOGIN.getValue() && receiptLevel != ReceiptLevel.LOGIN_SANDBOX.getValue()) {
       throw new BadRequestException("Invalid receipt level");
     }
 

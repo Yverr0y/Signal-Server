@@ -35,6 +35,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.whispersystems.textsecuregcm.controllers.RateLimitExceededException;
 
@@ -196,8 +197,12 @@ class AppleAppStoreManagerTest {
     assertDoesNotThrow(() -> appleAppStoreManager.cancelAllActiveSubscriptions(ORIGINAL_TX_ID));
   }
 
-  @Test
-  public void getPaymentDetails()
+  @ParameterizedTest
+  @CsvSource({
+      "PRODUCTION, LOGIN",
+      "SANDBOX, LOGIN_SANDBOX",
+  })
+  public void getPaymentDetails(final Environment environment, final ReceiptLevel receiptLevel)
       throws APIException, IOException, VerificationException, PurchaseException, RateLimitExceededException {
     when(apiClient.getTransactionInfo(TRANSACTION_ID))
         .thenReturn(new TransactionInfoResponse().signedTransactionInfo(SIGNED_TX_INFO));
@@ -206,14 +211,15 @@ class AppleAppStoreManagerTest {
         .productId(ONE_TIME_PRODUCT_ID)
         .type(Type.CONSUMABLE)
         .inAppOwnershipType(InAppOwnershipType.PURCHASED)
-        .purchaseDate(Instant.EPOCH.plus(Duration.ofDays(1)).toEpochMilli());
+        .purchaseDate(Instant.EPOCH.plus(Duration.ofDays(1)).toEpochMilli())
+        .environment(environment);
     when(signedDataVerifier.verifyAndDecodeTransaction(SIGNED_TX_INFO)).thenReturn(payload);
 
     {
       // PURCHASED payment
       final PaymentDetails paymentDetails = appleAppStoreManager.claimOneTimePurchase(TRANSACTION_ID);
       assertThat(paymentDetails.id()).isEqualTo(TRANSACTION_ID);
-      assertThat(paymentDetails.level()).isEqualTo(ReceiptLevel.LOGIN);
+      assertThat(paymentDetails.level()).isEqualTo(receiptLevel);
       assertThat(paymentDetails.created()).isEqualTo(Instant.EPOCH.plus(Duration.ofDays(1)));
     }
 

@@ -343,6 +343,15 @@ public final class DynamoDbExtensionSchema {
             .build()),
         List.of(), List.of()),
 
+    SANDBOX_ACCOUNTS("sandbox_accounts_test",
+        SandboxAccounts.KEY_ACCOUNT_UUID,
+        null,
+        List.of(AttributeDefinition.builder()
+            .attributeName(SandboxAccounts.KEY_ACCOUNT_UUID)
+            .attributeType(ScalarAttributeType.B)
+            .build()),
+        List.of(), List.of()),
+
     SCHEDULED_JOBS("scheduled_jobs_test",
         JobScheduler.KEY_SCHEDULER_NAME,
         JobScheduler.ATTR_RUN_AT,

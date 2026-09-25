@@ -152,6 +152,7 @@ public class AddRemoveDeviceIntegrationTest {
         svr2Client,
         mock(DisconnectionRequestManager.class),
         phoneNumberRecoveryPasswordsManager,
+        mock(SandboxAccounts.class),
         scheduledExecutorService,
         scheduledExecutorService,
         clock,

@@ -151,6 +151,8 @@ dynamoDbTables:
     tableName: remote_config_test
   reportMessage:
     tableName: report_messages_test
+  sandboxAccounts:
+    tableName: sandbox_accounts_test
   scheduledJobs:
     tableName: scheduled_jobs_test
     expiration: P7D

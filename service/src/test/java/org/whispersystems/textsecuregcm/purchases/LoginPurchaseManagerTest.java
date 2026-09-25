@@ -19,6 +19,8 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.signal.libsignal.zkgroup.ServerSecretParams;
@@ -63,10 +65,11 @@ class LoginPurchaseManagerTest {
         new ServerZkReceiptOperations(SERVER_SECRET_PARAMS));
   }
 
-  @Test
-  void generateReceiptSuccess() throws Exception {
+  @ParameterizedTest
+  @EnumSource(mode = EnumSource.Mode.INCLUDE, names = {"LOGIN_SANDBOX", "LOGIN"})
+  void generateReceiptSuccess(ReceiptLevel receiptLevel) throws Exception {
     when(paymentProcessor.claimOneTimePurchase(PURCHASE_ID))
-        .thenReturn(new PaymentDetails(PURCHASE_ID, ReceiptLevel.LOGIN, PURCHASED_AT));
+        .thenReturn(new PaymentDetails(PURCHASE_ID, receiptLevel, PURCHASED_AT));
 
     final ReceiptCredentialResponse receipt =
         loginPurchaseManager.generateReceipt(PROVIDER, PURCHASE_ID, receiptCredentialRequestContext.getRequest());
@@ -74,23 +77,18 @@ class LoginPurchaseManagerTest {
         clientZkReceiptOperations.receiveReceiptCredential(receiptCredentialRequestContext, receipt);
 
     final Instant expectedExpiration = PURCHASED_AT
-        .plus(LoginPurchaseManager.LOGIN_EXPIRATION)
+        .plus(switch (receiptLevel) {
+          case LOGIN -> LoginPurchaseManager.LOGIN_EXPIRATION;
+          case LOGIN_SANDBOX -> LoginPurchaseManager.SANDBOX_LOGIN_EXPIRATION;
+          default -> throw new IllegalStateException();
+        })
         .truncatedTo(ChronoUnit.DAYS);
 
-    assertThat(receiptCredential.getReceiptLevel()).isEqualTo(ReceiptLevel.LOGIN.getValue());
+    assertThat(receiptCredential.getReceiptLevel()).isEqualTo(receiptLevel.getValue());
     assertThat(receiptCredential.getReceiptExpirationTime()).isEqualTo(expectedExpiration.getEpochSecond());
 
     verify(issuedReceiptsManager).recordOneTimeIssuance(
         PURCHASE_ID, PROVIDER, receiptCredentialRequestContext.getRequest(), expectedExpiration);
-  }
-
-  @Test
-  void generateReceiptUnknownLevel() throws Exception {
-    when(paymentProcessor.claimOneTimePurchase(PURCHASE_ID))
-        .thenReturn(new PaymentDetails(PURCHASE_ID, null, PURCHASED_AT));
-    assertThatExceptionOfType(PurchaseInvalidArgumentsException.class).isThrownBy(() ->
-      loginPurchaseManager.generateReceipt(PROVIDER, PURCHASE_ID, receiptCredentialRequestContext.getRequest()));
-    verifyNoInteractions(issuedReceiptsManager);
   }
 
   @Test

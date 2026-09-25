@@ -89,6 +89,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
+import org.mockito.ArgumentCaptor;
 import org.mockito.stubbing.Answer;
 import org.signal.libsignal.protocol.IdentityKey;
 import org.signal.libsignal.protocol.ecc.ECKeyPair;
@@ -107,6 +108,7 @@ import org.whispersystems.textsecuregcm.entities.ECSignedPreKey;
 import org.whispersystems.textsecuregcm.entities.KEMSignedPreKey;
 import org.whispersystems.textsecuregcm.identity.AciServiceIdentifier;
 import org.whispersystems.textsecuregcm.identity.PniServiceIdentifier;
+import org.whispersystems.textsecuregcm.purchases.ReceiptLevel;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisClient;
 import org.whispersystems.textsecuregcm.redis.FaultTolerantRedisClusterClient;
 import org.whispersystems.textsecuregcm.securestorage.SecureStorageClient;
@@ -122,6 +124,7 @@ import org.whispersystems.textsecuregcm.util.Pair;
 import org.whispersystems.textsecuregcm.util.TestClock;
 import org.whispersystems.textsecuregcm.util.TestRandomUtil;
 import org.whispersystems.textsecuregcm.util.ThrowingSupplier;
+import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
 
 @Timeout(value = 10, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
 class AccountsManagerTest {
@@ -146,6 +149,7 @@ class AccountsManagerTest {
   private static TestClock CLOCK;
 
   private Accounts accounts;
+  private SandboxAccounts sandboxAccounts;
   private PhoneNumberIdentifiers phoneNumberIdentifiers;
   private KeysManager keysManager;
   private MessagesManager messagesManager;
@@ -173,6 +177,7 @@ class AccountsManagerTest {
   @BeforeEach
   void setup() throws Exception {
     accounts = mock(Accounts.class);
+    sandboxAccounts = mock(SandboxAccounts.class);
     keysManager = mock(KeysManager.class);
     messagesManager = mock(MessagesManager.class);
     profilesManager = mock(ProfilesManager.class);
@@ -265,6 +270,7 @@ class AccountsManagerTest {
         svr2Client,
         disconnectionRequestManager,
         phoneNumberRecoveryPasswordsManager,
+        sandboxAccounts,
         mock(ScheduledExecutorService.class),
         mock(ScheduledExecutorService.class),
         CLOCK,
@@ -836,7 +842,7 @@ class AccountsManagerTest {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void testCreateFreshAccount(final boolean hasE164)
-      throws AccountAlreadyExistsException, ReceiptAlreadyRedeemedException {
+      throws AccountAlreadyExistsException, ReceiptAlreadyRedeemedException, AccountCreationConditionException {
     when(accounts.create(any(), any())).thenReturn(true);
 
     final Optional<String> maybeE164 = hasE164 ? Optional.of("+18005550123") : Optional.empty();
@@ -886,12 +892,50 @@ class AccountsManagerTest {
     verifyNoInteractions(profilesManager);
   }
 
+  @Test
+  void testCreateSandboxAccount() throws Exception {
+    CLOCK.pin(Instant.now());
+    final UUID sandboxAci = UUID.randomUUID();
+    final TransactWriteItem claim = TransactWriteItem.builder().build();
+    when(sandboxAccounts.getAvailable()).thenReturn(List.of(sandboxAci));
+    when(sandboxAccounts.buildClaimWriteItem(sandboxAci, CLOCK.instant())).thenReturn(claim);
+
+    final Account createdAccount = createSandboxAccount(sandboxAccountAttributes());
+
+    assertEquals(sandboxAci, createdAccount.getAccountIdentifier());
+    assertTrue(createdAccount.getNumber().isEmpty());
+    assertTrue(createdAccount.getAuthCredentialSalt().isPresent());
+    verify(accounts).create(argThat(account -> sandboxAci.equals(account.getAccountIdentifier())), any(), any(), argThat(list -> list.contains(claim)));
+    verify(keysManager).buildWriteItemsForNewDevice(eq(sandboxAci), eq(Optional.empty()), eq(Device.PRIMARY_ID),
+        notNull(), eq(Optional.empty()), notNull(), eq(Optional.empty()));
+  }
+
+  @Test
+  void testCreateSandboxAccountIdentifierUnavailable() throws Exception {
+    final UUID firstAci = UUID.randomUUID();
+    final UUID secondAci = UUID.randomUUID();
+    when(sandboxAccounts.getAvailable()).thenReturn(List.of(firstAci, secondAci));
+    when(accounts.create(any(), any(), any(), any()))
+        .thenThrow(new AccountCreationConditionException(0))
+        .thenReturn(true);
+
+    final Account createdAccount = createSandboxAccount(sandboxAccountAttributes());
+
+    final ArgumentCaptor<Account> accountCaptor = ArgumentCaptor.forClass(Account.class);
+    verify(accounts, times(2)).create(accountCaptor.capture(), any(), any(), any());
+    final List<UUID> attemptedAcis =
+        accountCaptor.getAllValues().stream().map(Account::getAccountIdentifier).toList();
+
+    assertEquals(Set.of(firstAci, secondAci), Set.copyOf(attemptedAcis));
+    assertEquals(attemptedAcis.getLast(), createdAccount.getAccountIdentifier());
+  }
+
   @ParameterizedTest
   @MethodSource
   void testReregisterAccount(
       final Optional<String> maybeE164,
       final Optional<String> maybeExistingAccountE164)
-      throws AccountAlreadyExistsException, ReceiptAlreadyRedeemedException {
+      throws AccountAlreadyExistsException, ReceiptAlreadyRedeemedException, AccountCreationConditionException {
     final UUID existingUuid = UUID.randomUUID();
     final Integer pniRegistrationId = maybeE164.isPresent() ? 2 : null;
     final AccountAttributes attributes = new AccountAttributes(false, 1, pniRegistrationId, null, null, maybeE164.isPresent(), null,
@@ -1774,9 +1818,38 @@ class AccountsManagerTest {
   private Account createAccount(final AccountAttributes accountAttributes) throws ReceiptAlreadyRedeemedException {
     final ECKeyPair aciKeyPair = ECKeyPair.generate();
 
+    final ReceiptCredentialPresentation receiptCredentialPresentation = mock(ReceiptCredentialPresentation.class);
+    when(receiptCredentialPresentation.getReceiptLevel()).thenReturn(ReceiptLevel.LOGIN.getValue());
     return accountsManager.create(accountAttributes,
         new IdentityKey(aciKeyPair.getPublicKey()),
-        mock(ReceiptCredentialPresentation.class),
+        receiptCredentialPresentation,
+        new DeviceSpec(
+            accountAttributes.getName(),
+            "password",
+            null,
+            accountAttributes.getCapabilities(),
+            new DeviceIdentityInfo(accountAttributes.getRegistrationId(), KeysHelper.signedECPreKey(1, aciKeyPair), KeysHelper.signedKEMPreKey(3, aciKeyPair)),
+            Optional.empty(),
+            accountAttributes.getFetchesMessages(),
+            Optional.empty(),
+            Optional.empty()),
+        null);
+  }
+
+  private static AccountAttributes sandboxAccountAttributes() {
+    return new AccountAttributes(false, 1, null, null, null, false, null, TestRandomUtil.nextBytes(16));
+  }
+
+  private Account createSandboxAccount(final AccountAttributes accountAttributes)
+      throws ReceiptAlreadyRedeemedException {
+    final ECKeyPair aciKeyPair = ECKeyPair.generate();
+
+    final ReceiptCredentialPresentation receiptCredentialPresentation = mock(ReceiptCredentialPresentation.class);
+    when(receiptCredentialPresentation.getReceiptLevel()).thenReturn(ReceiptLevel.LOGIN_SANDBOX.getValue());
+
+    return accountsManager.create(accountAttributes,
+        new IdentityKey(aciKeyPair.getPublicKey()),
+        receiptCredentialPresentation,
         new DeviceSpec(
             accountAttributes.getName(),
             "password",

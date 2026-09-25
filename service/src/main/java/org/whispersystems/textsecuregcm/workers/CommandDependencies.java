@@ -82,6 +82,7 @@ import org.whispersystems.textsecuregcm.storage.RepeatedUseECSignedPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.RepeatedUseKEMSignedPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.ReportMessageDynamoDb;
 import org.whispersystems.textsecuregcm.storage.ReportMessageManager;
+import org.whispersystems.textsecuregcm.storage.SandboxAccounts;
 import org.whispersystems.textsecuregcm.storage.SingleUseECPreKeyStore;
 import org.whispersystems.textsecuregcm.storage.SubscriptionManager;
 import org.whispersystems.textsecuregcm.storage.Subscriptions;
@@ -389,10 +390,12 @@ public record CommandDependencies(
         configuration.getRegistrationWebAuthnConfiguration().challengeTtl(),
         configuration.getRegistrationWebAuthnConfiguration().userHandleBlindingSecret().value(),
         rateLimitersCluster);
+    final SandboxAccounts sandboxAccounts = new SandboxAccounts(
+        configuration.getDynamoDbTables().getSandboxAccounts().getTableName(), dynamoDbClient);
     AccountsManager accountsManager = new AccountsManager(accounts, phoneNumberIdentifiers, cacheCluster,
         pubsubClient, accountLockManager, keys, messagesManager, profilesManager,
         changeNumberWaitingPeriodManager, secureStorageClient, secureValueRecovery2Client, disconnectionRequestManager,
-        phoneNumberRecoveryPasswordsManager, messagePollExecutor,
+        phoneNumberRecoveryPasswordsManager, sandboxAccounts, messagePollExecutor,
         retryExecutor, clock, configuration.getLinkDeviceSecretConfiguration().secret().value(),
          webAuthnCeremonyManager, totpManager);
     RateLimiters rateLimiters = RateLimiters.create(dynamicConfigurationManager, rateLimitersCluster, retryExecutor);
