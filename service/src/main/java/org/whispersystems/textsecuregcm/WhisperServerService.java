@@ -346,6 +346,7 @@ import org.whispersystems.textsecuregcm.workers.RemoveExpiredLinkedDevicesComman
 import org.whispersystems.textsecuregcm.workers.RemoveExpiredSandboxAccountsCommand;
 import org.whispersystems.textsecuregcm.workers.RemoveExpiredUsernameHoldsCommand;
 import org.whispersystems.textsecuregcm.workers.RemoveOrphanedPreKeyPagesCommand;
+import org.whispersystems.textsecuregcm.workers.SandboxAccountPoolCommand;
 import org.whispersystems.textsecuregcm.workers.ScheduledApnPushNotificationSenderServiceCommand;
 import org.whispersystems.textsecuregcm.workers.ServerVersionCommand;
 import org.whispersystems.textsecuregcm.workers.SetRequestLoggingEnabledTask;
@@ -400,6 +401,7 @@ public class WhisperServerService extends Application<WhisperServerConfiguration
     bootstrap.addCommand(new MessagePersisterServiceCommand());
     bootstrap.addCommand(new RemoveExpiredAccountsCommand(Clock.systemUTC()));
     bootstrap.addCommand(new RemoveExpiredSandboxAccountsCommand(Clock.systemUTC()));
+    bootstrap.addCommand(new SandboxAccountPoolCommand());
     bootstrap.addCommand(new RemoveExpiredUsernameHoldsCommand(Clock.systemUTC()));
     bootstrap.addCommand(new RemoveExpiredBackupsCommand(Clock.systemUTC()));
     bootstrap.addCommand(new RemoveOrphanedPreKeyPagesCommand(Clock.systemUTC()));

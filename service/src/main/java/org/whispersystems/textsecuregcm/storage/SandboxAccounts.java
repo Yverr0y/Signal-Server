@@ -14,7 +14,10 @@ import org.whispersystems.textsecuregcm.util.AttributeValues;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.DeleteItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.ReturnValue;
 import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem;
 import software.amazon.awssdk.services.dynamodb.model.Update;
@@ -122,6 +125,24 @@ public class SandboxAccounts {
           .build());
     } catch (final ConditionalCheckFailedException _) {
       // Already in the pool
+    }
+  }
+
+  /// Remove an ACI from the pool if no account currently holds it
+  ///
+  /// @return true if the ACI was removed, or false if it is currently claimed or did not exist
+  public boolean removeIfAvailable(final UUID uuid) {
+    try {
+      final DeleteItemResponse resp = dynamoDbClient.deleteItem(DeleteItemRequest.builder()
+          .tableName(tableName)
+          .key(Map.of(KEY_ACCOUNT_UUID, AttributeValues.fromUUID(uuid)))
+          .conditionExpression("attribute_not_exists(#registeredAt)")
+          .expressionAttributeNames(Map.of("#registeredAt", ATTR_REGISTERED_AT))
+          .returnValues(ReturnValue.ALL_OLD)
+          .build());
+      return resp.hasAttributes();
+    } catch (final ConditionalCheckFailedException _) {
+      return false;
     }
   }
 }

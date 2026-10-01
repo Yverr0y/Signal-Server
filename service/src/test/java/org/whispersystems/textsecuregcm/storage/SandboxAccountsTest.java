@@ -69,6 +69,20 @@ class SandboxAccountsTest {
     assertThrows(TransactionCanceledException.class, () -> claim(notInPool, now));
   }
 
+  @Test
+  void removeIfAvailable() {
+    final UUID available = UUID.randomUUID();
+    final UUID claimed = UUID.randomUUID();
+    sandboxAccounts.add(available);
+    sandboxAccounts.add(claimed);
+    claim(claimed, Instant.now());
+
+    assertThat(sandboxAccounts.removeIfAvailable(available)).isTrue();
+    assertThat(sandboxAccounts.removeIfAvailable(available)).isFalse();
+    assertThat(sandboxAccounts.removeIfAvailable(claimed)).isFalse();
+    assertThat(sandboxAccounts.getAll()).extracting(SandboxAccounts.SandboxAccountReservation::uuid).containsExactly(claimed);
+  }
+
   private void claim(final UUID aci, final Instant registeredAt) {
     DYNAMO_DB_EXTENSION.getDynamoDbClient().transactWriteItems(TransactWriteItemsRequest.builder()
         .transactItems(sandboxAccounts.buildClaimWriteItem(aci, registeredAt))
