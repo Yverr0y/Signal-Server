@@ -133,7 +133,8 @@ public record CommandDependencies(
     PhoneNumberIdentifiers phoneNumberIdentifiers,
     DynamoDbRecoveryManager dynamoDbRecoveryManager,
     FDB fdb,
-    AccountLockManager accountLockManager) {
+    AccountLockManager accountLockManager,
+    SandboxAccounts sandboxAccounts) {
 
   static CommandDependencies build(
       final String name,
@@ -499,7 +500,8 @@ public record CommandDependencies(
         phoneNumberIdentifiers,
         dynamoDbRecoveryManager,
         fdb,
-        accountLockManager);
+        accountLockManager,
+        sandboxAccounts);
   }
 
 }
