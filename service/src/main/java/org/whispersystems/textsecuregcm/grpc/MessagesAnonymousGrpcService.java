@@ -86,14 +86,15 @@ public class MessagesAnonymousGrpcService extends SimpleMessagesAnonymousGrpc.Me
     final ServiceIdentifier destinationServiceIdentifier =
         GrpcServiceIdentifierUtil.fromGrpcServiceIdentifier(request.getDestination());
 
+    if (destinationServiceIdentifier.identityType() == IdentityType.PNI
+        && request.getAuthorizationCase() != SendSealedSenderMessageRequest.AuthorizationCase.GROUP_SEND_TOKEN) {
+      throw GrpcExceptions.fieldViolation("authorization", "group send token is required for PNI destinations");
+    }
+
     final Optional<Account> maybeDestination = accountsManager.getByServiceIdentifier(destinationServiceIdentifier);
 
     final boolean authorized = switch (request.getAuthorizationCase()) {
       case UNIDENTIFIED_ACCESS_KEY -> {
-        if (destinationServiceIdentifier.identityType() == IdentityType.PNI) {
-          throw GrpcExceptions.fieldViolation("authorization",
-              "message for PNI cannot be authenticated with an unidentified access token");
-        }
         final byte[] uak = request.getUnidentifiedAccessKey().toByteArray();
         yield maybeDestination
             .map(account -> UnidentifiedAccessUtil.checkUnidentifiedAccess(account, uak))
@@ -104,7 +105,7 @@ public class MessagesAnonymousGrpcService extends SimpleMessagesAnonymousGrpc.Me
       case GROUP_SEND_TOKEN ->
           groupSendTokenUtil.checkGroupSendToken(request.getGroupSendToken(), destinationServiceIdentifier);
       case UNRESTRICTED_ACCESS ->
-        maybeDestination.map(account -> account.isUnrestrictedUnidentifiedAccess()).orElse(false);
+          maybeDestination.map(Account::isUnrestrictedUnidentifiedAccess).orElse(false);
       case AUTHORIZATION_NOT_SET ->
           throw GrpcExceptions.fieldViolation("authorization", "expected authorization token not provided");
     };
@@ -118,7 +119,7 @@ public class MessagesAnonymousGrpcService extends SimpleMessagesAnonymousGrpc.Me
     if (maybeDestination.isEmpty()) {
       return SendMessageResponse.newBuilder().setDestinationNotFound(NotFound.getDefaultInstance()).build();
     }
-    
+
     return sendIndividualMessage(maybeDestination.get(),
         destinationServiceIdentifier,
         request.getMessages(),
@@ -168,7 +169,7 @@ public class MessagesAnonymousGrpcService extends SimpleMessagesAnonymousGrpc.Me
             destinationServiceIdentifier);
 
     spamCheckResult.response().ifPresent(grpcResponse ->
-      grpcResponse.throwStatusOr(_ -> GrpcExceptions.rateLimitExceeded(null)));
+        grpcResponse.throwStatusOr(_ -> GrpcExceptions.rateLimitExceeded(null)));
 
     try {
       final int totalPayloadLength = messages.getMessagesMap().values().stream()
