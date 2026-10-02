@@ -438,9 +438,10 @@ public final class Operations {
 
   private static ManagedChannel buildGrpcChannel() {
     try {
-      final ByteArrayInputStream rootCert =
-          new ByteArrayInputStream(CONFIG.rootCert().getBytes(StandardCharsets.UTF_8));
-      final ChannelCredentials credentials = TlsChannelCredentials.newBuilder().trustManager(rootCert).build();
+      final String rootCerts = String.join("\n", CONFIG.rootCerts());
+      final ByteArrayInputStream rootCertInputStream =
+          new ByteArrayInputStream(rootCerts.getBytes(StandardCharsets.UTF_8));
+      final ChannelCredentials credentials = TlsChannelCredentials.newBuilder().trustManager(rootCertInputStream).build();
       return Grpc.newChannelBuilderForAddress(GRPC_DOMAIN, 443, credentials)
           .userAgent(USER_AGENT)
           .build();
@@ -564,7 +565,7 @@ public final class Operations {
   private static FaultTolerantHttpClient buildClient() {
     try {
       return FaultTolerantHttpClient.newBuilder("integration-test", Executors.newFixedThreadPool(16))
-          .withTrustedServerCertificates(CONFIG.rootCert())
+          .withTrustedServerCertificates(CONFIG.rootCerts().toArray(String[]::new))
           .build();
     } catch (final CertificateException e) {
       throw new RuntimeException(e);
@@ -573,7 +574,7 @@ public final class Operations {
 
   private static WebSocketClient buildWebSocketClient() {
     try {
-      final KeyStore trustStore = CertificateUtil.buildKeyStoreForPem(CONFIG.rootCert());
+      final KeyStore trustStore = CertificateUtil.buildKeyStoreForPem(CONFIG.rootCerts().toArray(String[]::new));
       final SslContextFactory.Client sslContextFactory = new SslContextFactory.Client();
       sslContextFactory.setTrustStore(trustStore);
 
