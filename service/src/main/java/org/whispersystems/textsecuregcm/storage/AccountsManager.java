@@ -844,14 +844,19 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
       return Optional.empty();
     }
 
-    final byte[] expectedSignature = getInitializedMac().doFinal(claimsAndSignature[0].getBytes(StandardCharsets.UTF_8));
     final byte[] providedSignature;
 
     try {
       providedSignature = Base64.getUrlDecoder().decode(claimsAndSignature[1]);
+
+      if (!isCanonicallyBase64UrlEncoded(claimsAndSignature[1], providedSignature)) {
+        return Optional.empty();
+      }
     } catch (final IllegalArgumentException e) {
       return Optional.empty();
     }
+
+    final byte[] expectedSignature = getInitializedMac().doFinal(claimsAndSignature[0].getBytes(StandardCharsets.UTF_8));
 
     if (!MessageDigest.isEqual(expectedSignature, providedSignature)) {
       return Optional.empty();
@@ -886,6 +891,11 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     }
 
     return Optional.of(aci);
+  }
+
+  @VisibleForTesting
+  static boolean isCanonicallyBase64UrlEncoded(final String encoded, final byte[] bytes) {
+    return Base64.getUrlEncoder().encodeToString(bytes).equals(encoded);
   }
 
   /**

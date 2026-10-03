@@ -1822,6 +1822,25 @@ class AccountsManagerTest {
         accountsManager.checkDeviceLinkingToken(accountsManager.generateLinkDeviceToken(account)));
   }
 
+  static List<Arguments> isCanonicallyBase64UrlEncoded() {
+    final byte[] bytes = new byte[32];
+    final String canonical = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
+    return List.of(
+        Arguments.argumentSet("Canonical", canonical, bytes, true),
+        Arguments.argumentSet("Missing padding", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", bytes, false),
+        Arguments.argumentSet("Extra bits", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB=", bytes, false),
+        Arguments.argumentSet("Extra bits, missing padding", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD", bytes, false)
+    );
+  }
+
+  @ParameterizedTest
+  @MethodSource
+  void isCanonicallyBase64UrlEncoded(final String encoded, final byte[] bytes, final boolean expectCanonical) {
+    assertArrayEquals(bytes, Base64.getUrlDecoder().decode(encoded));
+    assertEquals(expectCanonical, AccountsManager.isCanonicallyBase64UrlEncoded(encoded, bytes));
+  }
+
   @ParameterizedTest
   @MethodSource
   void checkVerificationTokenBadToken(final String token, final Instant currentTime) {
