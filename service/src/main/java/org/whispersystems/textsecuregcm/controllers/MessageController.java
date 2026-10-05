@@ -368,8 +368,8 @@ public class MessageController {
     final String userAgent = context.getHeaderString(HttpHeaders.USER_AGENT);
 
     try {
-      final int totalContentLength =
-          messages.messages().stream().mapToInt(message -> message.content().length).sum();
+      final long totalContentLength =
+          messages.messages().stream().mapToLong(message -> message.content().length).sum();
 
       rateLimiters.getInboundMessageBytes().validate(destinationIdentifier.uuid(), totalContentLength);
     } catch (final RateLimitExceededException e) {
