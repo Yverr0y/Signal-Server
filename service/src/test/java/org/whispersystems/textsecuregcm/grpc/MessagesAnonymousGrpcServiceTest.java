@@ -1515,6 +1515,38 @@ class MessagesAnonymousGrpcServiceTest extends
     }
 
     @Test
+    void rateLimited()
+        throws MessageTooLargeException, MessageDeliveryNotAllowedException, MultiRecipientMismatchedDevicesException {
+
+      final AciServiceIdentifier serviceIdentifier = new AciServiceIdentifier(UUID.randomUUID());
+      final Account destinationAccount = mock(Account.class);
+      when(destinationAccount.getAccountIdentifier()).thenReturn(serviceIdentifier.uuid());
+
+      when(accountsManager.getByServiceIdentifierAsync(serviceIdentifier))
+          .thenReturn(CompletableFuture.completedFuture(Optional.of(destinationAccount)));
+
+      final byte[] payload = MultiRecipientMessageHelper.generateMultiRecipientMessage(List.of(
+          new TestRecipient(serviceIdentifier, Device.PRIMARY_ID, 17, new byte[48])));
+
+      final SendMultiRecipientStoryRequest request = SendMultiRecipientStoryRequest.newBuilder()
+          .setMessage(MultiRecipientMessage.newBuilder()
+              .setTimestamp(CLOCK.millis())
+              .setPayload(ByteString.copyFrom(payload))
+              .build())
+          .setUrgent(true)
+          .build();
+
+      final Duration retryDuration = Duration.ofHours(7);
+      when(rateLimiter.validateAsync(any(UUID.class)))
+          .thenReturn(CompletableFuture.failedFuture(new RateLimitExceededException(retryDuration)));
+
+      GrpcTestUtils.assertRateLimitExceeded(retryDuration, () -> unauthenticatedServiceStub().sendMultiRecipientStory(request));
+
+      verify(messageSender, never())
+          .sendMultiRecipientMessage(any(), any(), anyLong(), anyBoolean(), anyBoolean(), anyBoolean(), any());
+    }
+
+    @Test
     void oversizedMessage()
         throws MessageTooLargeException, MultiRecipientMismatchedDevicesException, MessageDeliveryNotAllowedException {
       final Account destinationAccount = mock(Account.class);
