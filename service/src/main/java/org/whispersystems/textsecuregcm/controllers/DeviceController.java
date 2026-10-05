@@ -72,6 +72,7 @@ import org.whispersystems.textsecuregcm.storage.AccountsManager;
 import org.whispersystems.textsecuregcm.storage.Device;
 import org.whispersystems.textsecuregcm.storage.DeviceCapability;
 import org.whispersystems.textsecuregcm.storage.DeviceIdentityInfo;
+import org.whispersystems.textsecuregcm.storage.DeviceLimitExceededException;
 import org.whispersystems.textsecuregcm.storage.DeviceSpec;
 import org.whispersystems.textsecuregcm.storage.LinkDeviceTokenAlreadyUsedException;
 import org.whispersystems.textsecuregcm.storage.PersistentTimer;
@@ -87,8 +88,6 @@ import org.whispersystems.textsecuregcm.util.ua.UserAgentUtil;
 @Path("/v1/devices")
 @Tag(name = "Devices")
 public class DeviceController {
-
-  static final int MAX_DEVICES = 6;
 
   private final AccountsManager accounts;
   private final RateLimiters rateLimiters;
@@ -198,15 +197,11 @@ public class DeviceController {
 
     rateLimiters.getAllocateDeviceLimiter().validate(account.getAccountIdentifier());
 
-    if (account.getDevices().size() >= MAX_DEVICES) {
-      throw new DeviceLimitExceededException(account.getDevices().size(), MAX_DEVICES);
-    }
-
     if (auth.deviceId() != Device.PRIMARY_ID) {
       throw new WebApplicationException(Response.Status.UNAUTHORIZED);
     }
 
-    final String token = accounts.generateLinkDeviceToken(account.getAccountIdentifier());
+    final String token = accounts.generateLinkDeviceToken(account);
 
     return new LinkDeviceToken(token, AccountsManager.getLinkDeviceTokenIdentifier(token));
   }
@@ -269,10 +264,6 @@ public class DeviceController {
 
     if (!allKeysValid) {
       throw new WebApplicationException(Response.status(422).build());
-    }
-
-    if (account.getDevices().size() >= MAX_DEVICES) {
-      throw new DeviceLimitExceededException(account.getDevices().size(), MAX_DEVICES);
     }
 
     final Set<DeviceCapability> capabilities = deviceAttributes.capabilities();

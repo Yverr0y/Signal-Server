@@ -1223,7 +1223,7 @@ class AccountsManagerTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  void testAddDevice(boolean accountHasPhoneNumber) throws LinkDeviceTokenAlreadyUsedException {
+  void testAddDevice(boolean accountHasPhoneNumber) throws LinkDeviceTokenAlreadyUsedException, DeviceLimitExceededException {
     final String phoneNumber =
         PhoneNumberUtil.getInstance().format(PhoneNumberUtil.getInstance().getExampleNumber("US"),
             PhoneNumberUtil.PhoneNumberFormat.E164);
@@ -1269,7 +1269,7 @@ class AccountsManagerTest {
             true,
             Optional.empty(),
             Optional.empty()),
-            accountsManager.generateLinkDeviceToken(aci));
+            accountsManager.generateLinkDeviceToken(account));
 
     verify(keysManager).deleteSingleUsePreKeys(aci, nextDeviceId);
     maybePni.ifPresent(pni -> verify(keysManager).deleteSingleUsePreKeys(pni, nextDeviceId));
@@ -1296,6 +1296,55 @@ class AccountsManagerTest {
     assertTrue(device.getFetchesMessages());
     assertNull(device.getApnId());
     assertNull(device.getGcmId());
+  }
+
+  @Test
+  void testAddDeviceExceedsMaxDevices() {
+    final List<Device> devices = IntStream.range(0, AccountsManager.MAX_DEVICES - 1)
+        .mapToObj(i -> {
+          final Device device = generateTestDevice(CLOCK.millis());
+          device.setId((byte) (Device.PRIMARY_ID + i));
+          return device;
+        })
+        .toList();
+
+    final Account account = AccountsHelper.generateTestAccount("+14152222222", devices);
+    final UUID aci = account.getAccountIdentifier();
+    account.setIdentityKey(new IdentityKey(ECKeyPair.generate().getPublicKey()));
+
+    final String linkDeviceToken = assertDoesNotThrow(() -> accountsManager.generateLinkDeviceToken(account),
+        "the account should still have a free device slot");
+
+    // Simulate a concurrent link request
+    final Device concurrentlyLinkedDevice = generateTestDevice(CLOCK.millis());
+    concurrentlyLinkedDevice.setId(account.getNextDeviceId());
+    account.addDevice(concurrentlyLinkedDevice);
+
+    when(accounts.getByAccountIdentifier(aci)).thenReturn(Optional.of(account));
+
+    final ECKeyPair aciKeyPair = ECKeyPair.generate();
+    final ECKeyPair pniKeyPair = ECKeyPair.generate();
+
+    final DeviceLimitExceededException exception = assertThrows(DeviceLimitExceededException.class,
+        () -> accountsManager.addDevice(aci,
+            new DeviceSpec(
+                "device-name".getBytes(StandardCharsets.UTF_8),
+                "password",
+                "OWT",
+                Set.of(),
+                new DeviceIdentityInfo(17, KeysHelper.signedECPreKey(1, aciKeyPair), KeysHelper.signedKEMPreKey(3, aciKeyPair)),
+                Optional.of(new DeviceIdentityInfo(19, KeysHelper.signedECPreKey(2, pniKeyPair), KeysHelper.signedKEMPreKey(4, pniKeyPair))),
+                true,
+                Optional.empty(),
+                Optional.empty()),
+            linkDeviceToken));
+
+    assertEquals(AccountsManager.MAX_DEVICES, exception.getCurrentDevices());
+    assertEquals(AccountsManager.MAX_DEVICES, exception.getMaxDevices());
+
+    verify(accounts, never()).updateTransactionally(any(), any());
+    verifyNoInteractions(keysManager);
+    verifyNoInteractions(messagesManager);
   }
 
   @ParameterizedTest
@@ -1765,11 +1814,12 @@ class AccountsManagerTest {
   }
 
   @Test
-  void checkDeviceLinkingToken() {
-    final UUID aci = UUID.randomUUID();
+  void checkDeviceLinkingToken() throws Exception {
+    final Account account = createAccount(new AccountAttributes(false, 1, 2, null, null, false, null,
+        TestRandomUtil.nextBytes(16)));
 
-    assertEquals(Optional.of(aci),
-        accountsManager.checkDeviceLinkingToken(accountsManager.generateLinkDeviceToken(aci)));
+    assertEquals(Optional.of(account.getAccountIdentifier()),
+        accountsManager.checkDeviceLinkingToken(accountsManager.generateLinkDeviceToken(account)));
   }
 
   @ParameterizedTest

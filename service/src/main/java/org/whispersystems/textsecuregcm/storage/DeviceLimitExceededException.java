@@ -1,9 +1,9 @@
 /*
- * Copyright 2013-2020 Signal Messenger, LLC
+ * Copyright 2013 Signal Messenger, LLC
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-package org.whispersystems.textsecuregcm.controllers;
+package org.whispersystems.textsecuregcm.storage;
 
 
 public class DeviceLimitExceededException extends Exception {
@@ -13,7 +13,7 @@ public class DeviceLimitExceededException extends Exception {
 
   public DeviceLimitExceededException(int currentDevices, int maxDevices) {
     this.currentDevices = currentDevices;
-    this.maxDevices     = maxDevices;
+    this.maxDevices = maxDevices;
   }
 
   public int getCurrentDevices() {

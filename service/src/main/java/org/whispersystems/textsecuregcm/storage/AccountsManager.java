@@ -197,6 +197,8 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
 
   private static final int MAX_UPDATE_ATTEMPTS = 10;
 
+  public static final int MAX_DEVICES = 6;
+
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
   private static final int AUTH_CREDENTIAL_SALT_SIZE = 16;
@@ -683,19 +685,30 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
   }
 
   public Pair<Account, Device> addDevice(final UUID accountIdentifier, final DeviceSpec deviceSpec, final String linkDeviceToken)
-      throws LinkDeviceTokenAlreadyUsedException {
+      throws LinkDeviceTokenAlreadyUsedException, DeviceLimitExceededException {
 
     final Account account = accounts.getByAccountIdentifier(accountIdentifier)
         .orElseThrow(() -> new IllegalArgumentException("Account not found: " + accountIdentifier));
 
-    return accountLockManager.withSingleAccountLock(account,
-        () -> addDevice(accountIdentifier, deviceSpec, linkDeviceToken, MAX_UPDATE_ATTEMPTS));
+    try {
+      return accountLockManager.withSingleAccountLock(account,
+          () -> addDevice(accountIdentifier, deviceSpec, linkDeviceToken, MAX_UPDATE_ATTEMPTS));
+    } catch (final LinkDeviceTokenAlreadyUsedException | DeviceLimitExceededException | RuntimeException e) {
+      throw e;
+    } catch (final Exception e) {
+      throw new AssertionError("Unexpected exception adding device", e);
+    }
   }
 
   private Pair<Account, Device> addDevice(final UUID accountIdentifier, final DeviceSpec deviceSpec, final String linkDeviceToken, final int retries)
-      throws LinkDeviceTokenAlreadyUsedException {
+      throws LinkDeviceTokenAlreadyUsedException, DeviceLimitExceededException {
+
     final Account account = accounts.getByAccountIdentifier(accountIdentifier)
         .orElseThrow(ContestedOptimisticLockException::new);
+
+    if (account.getDevices().size() >= MAX_DEVICES) {
+      throw new DeviceLimitExceededException(account.getDevices().size(), MAX_DEVICES);
+    }
 
     final byte nextDeviceId = account.getNextDeviceId();
 
@@ -789,8 +802,13 @@ public class AccountsManager extends RedisPubSubAdapter<String, String> implemen
     }
   }
 
-  public String generateLinkDeviceToken(final UUID aci) {
-    final String claims = aci + "." + clock.instant().toEpochMilli();
+  public String generateLinkDeviceToken(final Account account) throws DeviceLimitExceededException {
+
+    if (account.getDevices().size() >= MAX_DEVICES) {
+      throw new DeviceLimitExceededException(account.getDevices().size(), MAX_DEVICES);
+    }
+
+    final String claims = account.getAccountIdentifier() + "." + clock.instant().toEpochMilli();
     final byte[] signature = getInitializedMac().doFinal(claims.getBytes(StandardCharsets.UTF_8));
 
     return claims + ":" + Base64.getUrlEncoder().encodeToString(signature);
