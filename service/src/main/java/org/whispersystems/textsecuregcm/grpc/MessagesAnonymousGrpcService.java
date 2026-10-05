@@ -10,6 +10,7 @@ import com.google.protobuf.Empty;
 import java.time.Clock;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.signal.chat.errors.FailedUnidentifiedAuthorization;
 import org.signal.chat.errors.NotFound;
@@ -297,6 +298,16 @@ public class MessagesAnonymousGrpcService extends SimpleMessagesAnonymousGrpc.Me
     // message. Attempt to resolve the destination service identifiers to Signal accounts.
     final Map<SealedSenderMultiRecipientMessage.Recipient, Account> resolvedRecipients =
         MessageUtil.resolveRecipients(accountsManager, multiRecipientMessage);
+
+    if (story) {
+      CompletableFuture.allOf(resolvedRecipients.values()
+              .stream()
+              .map(Account::getAccountIdentifier)
+              .map(accountIdentifier ->
+                  rateLimiters.getStoriesLimiter().validateAsync(accountIdentifier).toCompletableFuture())
+              .toArray(CompletableFuture[]::new))
+          .join();
+    }
 
     try {
       if (!resolvedRecipients.isEmpty()) {
