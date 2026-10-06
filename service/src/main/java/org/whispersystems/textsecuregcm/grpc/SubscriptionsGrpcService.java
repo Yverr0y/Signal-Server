@@ -341,8 +341,7 @@ public class SubscriptionsGrpcService extends SimpleSubscriptionsGrpc.Subscripti
       subscriptionManager.updateSubscriptionLevelForCustomer(subscriberCredentials, subscriptionRecord, manager,
           request.getLevel(), request.getCurrency(), request.getIdempotencyKey(), templateId.get(),
           (l1, l2) -> SubscriptionsUtil.subscriptionsAreSameType(subscriptionConfiguration, l1, l2));
-      return SetSubscriptionLevelResponse.newBuilder().setSuccess(
-              SetSubscriptionLevelResponse.SetSubscriptionLevelResult.newBuilder().setLevel(request.getLevel()).build())
+      return SetSubscriptionLevelResponse.newBuilder().setSuccess(Empty.getDefaultInstance())
           .build();
     } catch (final PurchaseInvalidIdempotencyKeyException e) {
       return SetSubscriptionLevelResponse.newBuilder()

@@ -308,12 +308,8 @@ message PaymentRequired {
 }
 
 message SetSubscriptionLevelResponse {
-  message SetSubscriptionLevelResult {
-    uint64 level = 1;
-  }
-
   oneof response {
-    SetSubscriptionLevelResult success = 1;
+    google.protobuf.Empty success = 1;
     // The subscriber did not exist
     errors.NotFound subscriber_not_found = 2 [(tag.reason) = "subscriber_not_found"];
     // New payment processor does not match existing processor associated with

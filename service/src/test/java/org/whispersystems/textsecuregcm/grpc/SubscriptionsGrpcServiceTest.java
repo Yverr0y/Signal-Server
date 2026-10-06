@@ -419,7 +419,6 @@ public class SubscriptionsGrpcServiceTest extends
             .setIdempotencyKey("test-idempotency-key")
             .build());
     assertEquals(SetSubscriptionLevelResponse.ResponseCase.SUCCESS, response.getResponseCase());
-    assertEquals(LEVEL, response.getSuccess().getLevel());
   }
 
   @Test
