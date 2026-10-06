@@ -357,8 +357,8 @@ public class SubscriptionsGrpcService extends SimpleSubscriptionsGrpc.Subscripti
       return SetSubscriptionLevelResponse.newBuilder()
           .setInvalidLevelTransition(FailedPrecondition.newBuilder().build()).build();
     } catch (final PurchaseProcessorConflictException e) {
-      return SetSubscriptionLevelResponse.newBuilder().setSubscriptionProcessorConflict(
-          FailedPrecondition.newBuilder().setDescription(e.errorDetail().orElse("")).build()).build();
+      // We just looked up the subscription processor from the database, a conflict is not possible
+      throw new IllegalStateException(e);
     }
 
   }

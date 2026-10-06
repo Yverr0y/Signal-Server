@@ -497,9 +497,7 @@ public class SubscriptionsGrpcServiceTest extends
         Arguments.of(new PurchasePaymentRequiresActionException(),
             SetSubscriptionLevelResponse.ResponseCase.PAYMENT_REQUIRES_ACTION),
         Arguments.of(new PurchaseInvalidLevelException(),
-            SetSubscriptionLevelResponse.ResponseCase.INVALID_LEVEL_TRANSITION),
-        Arguments.of(new PurchaseProcessorConflictException(),
-            SetSubscriptionLevelResponse.ResponseCase.SUBSCRIPTION_PROCESSOR_CONFLICT)
+            SetSubscriptionLevelResponse.ResponseCase.INVALID_LEVEL_TRANSITION)
     );
   }
 
