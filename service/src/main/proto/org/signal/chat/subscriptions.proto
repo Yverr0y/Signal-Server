@@ -117,7 +117,7 @@ service Subscriptions {
 message UpdateSubscriberRequest {
   // New subscriber-ids must be a randomly-generated 32 byte byte-string.
   bytes subscriber_id = 1 [(require.exactlySize) = 32];
-  // A libsignal DonationPermit from rpc Donations.CreateDonationPermit.
+  // A libsignal DonationPermit from rpc Donations.CreateDonationPermits.
   // Not required if the subscriber already exists.
   bytes donation_permit = 2;
 }
@@ -185,7 +185,7 @@ message CreatePaymentMethodRequest {
   // other values will result in an INVALID_ARGUMENT error.
   bytes subscriber_id = 1 [(require.exactlySize) = 32];
   PaymentMethod payment_method = 2 [(require.specified) = true];
-  // a libsignal DonationPermit from rpc Donations.CreateDonationPermit
+  // a libsignal DonationPermit from rpc Donations.CreateDonationPermits
   bytes donation_permit = 3 [(require.nonEmpty) = true];
 }
 
